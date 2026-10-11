@@ -379,8 +379,9 @@ def record_parsed_chunks(monkeypatch) -> List[int]:
     real_read_chunks = mcap_chunks.read_chunks
     offsets: List[int] = []
 
-    def read_chunks(f, chunk_indexes, reads):
-        for chunk_index, chunk in real_read_chunks(f, chunk_indexes, reads):
+    def read_chunks(f, chunk_indexes, reads, on_corrupt=None):
+        chunks = real_read_chunks(f, chunk_indexes, reads, on_corrupt)
+        for chunk_index, chunk in chunks:
             offsets.append(chunk_index.chunk_start_offset)
             yield chunk_index, chunk
 
