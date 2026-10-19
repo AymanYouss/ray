@@ -14,7 +14,6 @@ suppress_output() {
 }
 
 # Source requirements compiled into requirements_compiled*.txt.
-# Keep in sync with SOURCES in ci/raydepsets/pre_hooks/compile-constraints.sh.
 COMPILE_PIP_SOURCES=(
   python/requirements.txt
   python/requirements/lint-requirements.txt
@@ -37,15 +36,42 @@ COMPILE_PIP_SOURCES=(
   python/requirements/security-requirements.txt
 )
 
+# Compiles python/requirements_compiled.txt, the constraints file every depset
+# reads, with one universal uv resolution over every supported Python version
+# (3.10+). Where a pin must differ by version or platform, uv writes one line per
+# range with a marker. uv prefers the pins already in the output file, so a
+# recompile only moves what the sources force.
 compile_pip_dependencies() {
-  # raydepsets runs this same hook before compiling any depset; this entry point
-  # lets the dependencies CI step check the committed file on its own.
+  local target="python/requirements_compiled.txt"
+
   (
     cd "${WORKSPACE_DIR}"
     # Match the uv that raydepsets pins (uv_x86_64-linux in WORKSPACE).
     pip install "uv==0.9.26"
-    ci/raydepsets/pre_hooks/compile-constraints.sh
-    cat python/requirements_compiled.txt
+
+    # uv writes whatever index it used into the lockfile. Keep CI's temporary
+    # mirror URL out, or the regenerated file stops matching the committed one.
+    env -u PIP_INDEX_URL -u PIP_EXTRA_INDEX_URL -u PIP_TRUSTED_HOST \
+      -u UV_INDEX_URL -u UV_EXTRA_INDEX_URL -u UV_INSECURE_HOST \
+      uv pip compile --universal --python-version 3.10 \
+      --no-header --strip-extras --emit-index-url --emit-find-links \
+      --index-strategy unsafe-best-match \
+      --unsafe-package ray \
+      --unsafe-package pip \
+      --unsafe-package setuptools \
+      -o "${target}" \
+      "${COMPILE_PIP_SOURCES[@]}"
+
+    sed -i -e "/^--index-url /d" -e "/@ file/d" "${target}"
+
+    # Strip the local version segment from CPU builds (+cpu, +pt210cpu,
+    # +cpu.torch.2.10). The GPU depsets also read this file, and only a bare
+    # torch-scatter==2.1.2 lets their +cu.12.8.torch.2.10 pin satisfy it. The
+    # public version may carry a pre/post/dev suffix (2.10.0rc1, 2.10.0.post0),
+    # hence letters in the first class.
+    sed -i -E 's/==([A-Za-z0-9.]+)[+][A-Za-z0-9._-]*cpu[A-Za-z0-9._-]*/==\1/g' "${target}"
+
+    cat "${target}"
   )
 }
 

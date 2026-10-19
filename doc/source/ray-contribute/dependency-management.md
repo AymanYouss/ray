@@ -30,7 +30,7 @@ The locks are consumed directly by Ray's Docker and Wanda image builds.
 
 ### Layer 2 — compiled requirements
 
-`ci/ci.sh compile_pip_dependencies` feeds all the Layer 1 files to `pip-compile` at once and solves for a single consistent version of every package, direct and transitive. The output is the compiled lockfile, which CI passes as a `-c` constraint everywhere Ray is installed. Each track is for a different Python version supported by Ray.
+`ci/ci.sh compile_pip_dependencies` feeds all the Layer 1 files to `uv pip compile --universal` at once and solves for a single consistent version of every package, direct and transitive, across every supported Python version and platform. Where a package needs a different version on some Python or platform, the file carries one line per range with an environment marker. The output is the compiled lockfile, which CI passes as a `-c` constraint everywhere Ray is installed. Each track is for a different Python version supported by Ray.
 
 | File | Covers |
 |---|---|
@@ -42,7 +42,7 @@ The locks are consumed directly by Ray's Docker and Wanda image builds.
 
 Don't hand-edit these files because they're generated artifacts. Use the `ci/ci.sh` commands described below to regenerate them.
 
-`compile_pip_dependencies` runs in a Python 3.11 environment (CI uses the `oss-ci-base_test-py3.11` job); that works because `pip-compile` resolves based on what the requirement files declare, not on the Python it's currently running.
+The resolution is universal, so it doesn't depend on the Python version, OS, or architecture of the machine that runs it. uv reads only `requires-python` there, not which wheels exist, so a pin can still lack a wheel for some Python version or platform.
 
 ### Layer 3 — lock files
 
@@ -90,7 +90,7 @@ The Ray docs build is itself one of these locks: `doc/requirements-doc.lock.txt`
 
 ## How to add or update a dependency
 
-If you have an x86_64 Linux machine with Python 3.11, compile locally (see [Compiling locally](#compiling-locally) below). Otherwise, let CI do it and download the regenerated file from the Buildkite Artifacts tab. Either way produces the same lock; pick whichever has the faster feedback loop for you.
+You can compile locally (see [Compiling locally](#compiling-locally) below). Otherwise, let CI do it and download the regenerated file from the Buildkite Artifacts tab. Either way produces the same lock; pick whichever has the faster feedback loop for you.
 
 ### 1. Edit the Layer 1 file
 
@@ -136,16 +136,9 @@ bazelisk run //ci/raydepsets:raydepsets -- build --all-configs --check
 
 ### Compiling locally
 
-You can compile locally instead of waiting on CI, but **the compile scripts refuse to run on ARM**. `ci/ci.sh` skips `aarch64` and `arm64` outright:
-
-```text
-Skipping for aarch64
-```
-
-So an Apple Silicon Mac or any ARM box can't produce a valid lockfile. The GPU and platform-pinned wheels (CUDA `torch`, `jaxlib`, the PyTorch Geometric family) don't resolve there. Compile on an **x86_64 / AMD64** Linux machine, in a **Python 3.11** environment (the CI compile jobs run under py3.11):
+You can compile locally instead of waiting on CI, on any OS or architecture. `compile_pip_dependencies` resolves universally, and `compile_pip_dependencies_py314` targets x86_64 Linux wheels explicitly, so neither depends on the host:
 
 ```bash
-# x86_64 Linux, Python 3.11
 ci/ci.sh compile_pip_dependencies            # -> requirements_compiled.txt
 ci/ci.sh compile_pip_dependencies_py314      # -> requirements_compiled_py3.14.txt
 bazelisk run //ci/raydepsets:raydepsets -- build --all-configs
@@ -161,11 +154,9 @@ numba; python_version >= '3.14'
 pygame==2.5.2; python_version < '3.14'    # no cp314 release: not installed on 3.14
 ```
 
-When a package appears on several source lines, pip-compile writes the marker of the **last line, in compile order, that has a marker** matching Python 3.11. Lines without a marker don't count. If you gate an unpinned line that comes after the pinned one, split it at the pinned line's boundary so the written marker doesn't change; `tf-keras` in `ml-requirements.txt` is an example.
-
 ## Diagnosing dependency conflicts
 
-**When a compile or install fails, use uv** to find out why, even though the compile script itself uses pip-compile. uv reports the real incompatibility; pip often hides it behind a generic error.
+**When a compile or install fails, use uv** to find out why. uv reports the real incompatibility; pip often hides it behind a generic error.
 
 ### `resolution-too-deep` almost never means "too deep"
 
@@ -236,7 +227,7 @@ If you remove a requirements file from a dependency set to resolve a conflict, y
 
 | Task | Command |
 |---|---|
-| Recompile Layer 2 (x86_64, py3.11) | `ci/ci.sh compile_pip_dependencies` |
+| Recompile Layer 2 | `ci/ci.sh compile_pip_dependencies` |
 | Rebuild all Layer 3 locks | `bazelisk run //ci/raydepsets:raydepsets -- build --all-configs` |
 | Rebuild one depset (fast iteration) | `bazelisk run //ci/raydepsets:raydepsets -- build <config>.yaml --name <depset_name>` |
 | Validate locks are current | `bazelisk run //ci/raydepsets:raydepsets -- build --all-configs --check` |
