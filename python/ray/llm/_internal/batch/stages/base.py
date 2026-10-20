@@ -3,7 +3,7 @@ import logging
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Type
 
 import pyarrow
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ray.data.block import UserDefinedFunction
 
@@ -320,6 +320,4 @@ class StatefulStage(BaseModel):
         )
         return kwargs
 
-    class Config:
-        arbitrary_types_allowed = True
-        validate_assignment = True
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)

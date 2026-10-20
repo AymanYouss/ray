@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Tupl
 
 import numpy as np
 import torch
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
     try:
@@ -105,15 +105,14 @@ class vLLMEngineRequest(BaseModel):
     # LoRA request.
     lora_request: Optional[Any] = None
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_prompt_or_prompt_token_ids(cls, values):
         if not values.get("prompt") and not values.get("prompt_token_ids"):
             raise ValueError("Either 'prompt' or 'prompt_token_ids' must be provided.")
         return values
 
-    class Config:
-        validate_assignment = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
 
 def _convert_logprob_dict(logprob_dict: Dict[int, Any]) -> Dict[int, Dict[str, Any]]:
@@ -228,9 +227,7 @@ class vLLMOutputData(BaseModel):
 
         return data
 
-    class Config:
-        validate_assignment = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
 
 class vLLMEngineWrapper:
@@ -880,7 +877,8 @@ class vLLMEngineStage(StatefulStage):
 
     fn: Type[StatefulStageUDF] = vLLMEngineStageUDF
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def post_init(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         """Post-initialize the stage. Specifically,
         this function determines the num_gpus and Ray remote args

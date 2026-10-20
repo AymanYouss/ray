@@ -2,7 +2,7 @@ import logging
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from ray.data import Dataset
 from ray.data.block import UserDefinedFunction
@@ -113,9 +113,7 @@ class ProcessorConfig(BaseModelExtended):
             "max_size": self.concurrency[1],
         }
 
-    class Config:
-        validate_assignment = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
 
 class OfflineProcessorConfig(ProcessorConfig):

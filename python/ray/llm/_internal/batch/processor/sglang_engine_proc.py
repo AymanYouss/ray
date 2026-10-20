@@ -4,7 +4,7 @@ import hashlib
 import logging
 from typing import Any, Dict, Optional
 
-from pydantic import Field, root_validator
+from pydantic import Field, model_validator
 
 import ray
 from ray.data.block import UserDefinedFunction
@@ -53,7 +53,8 @@ class SGLangEngineProcessorConfig(OfflineProcessorConfig):
         "'generate' by default.",
     )
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_task_type(cls, values):
         task_type = values.get("task_type", SGLangTaskType.GENERATE)
         if task_type not in SGLangTaskType.values():

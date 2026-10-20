@@ -7,7 +7,7 @@ import uuid
 from contextlib import nullcontext
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Type
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from ray.llm._internal.batch.constants import SGLangTaskType, TypeSGLangTaskType
 from ray.llm._internal.batch.stages.base import (
@@ -33,9 +33,7 @@ class SGLangEngineRequest(BaseModel):
     # The sampling parameters (more details can be seen in https://docs.sglang.ai/backend/sampling_params.html).
     params: Optional[Dict[str, Any]] = None
 
-    class Config:
-        validate_assignment = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
 
 class SGLangOutputData(BaseModel):
@@ -77,9 +75,7 @@ class SGLangOutputData(BaseModel):
 
         return data
 
-    class Config:
-        validate_assignment = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
 
 class SGLangEngineWrapper:
@@ -343,7 +339,8 @@ class SGLangEngineStage(StatefulStage):
 
     fn: Type[StatefulStageUDF] = SGLangEngineStageUDF
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def post_init(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         """Post-initialize the stage. Specifically,
         this function determines the num_gpus and Ray remote args
